@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#000000">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <title>QRで動画再生</title>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <style>
@@ -69,7 +70,7 @@
   <div class="text">
     <h1>QRコードをかざすと<br>動画が始まります</h1>
     <p>動画が終わると、読み取り画面に戻ります。</p>
-    <p style="font-size:.75rem;opacity:.6">ver 5（インカメ版）</p>
+    <p style="font-size:.75rem;opacity:.6">ver 6</p>
   </div>
   <button class="primary" id="startBtn">カメラを起動</button>
 </section>
@@ -218,10 +219,21 @@ function playVideo(id) {
   if (!ytReady) { pendingId = id; return; }
   pendingId = null;
   resetPlayer();
+  // iframeを自前で作り、YouTubeが必要とする参照元(Referer)を必ず送る
+  // （ホーム画面から開くと送られず、エラー153で再生できないことがあるため）
+  const params = new URLSearchParams({
+    enablejsapi: 1, autoplay: 1, playsinline: 1, rel: 0, modestbranding: 1, fs: 0,
+    cc_load_policy: 0, iv_load_policy: 3, origin: location.origin, widget_referrer: location.href
+  });
+  const iframe = document.createElement('iframe');
+  iframe.id = 'player';
+  iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+  iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
+  iframe.setAttribute('frameborder', '0');
+  iframe.src = 'https://www.youtube.com/embed/' + encodeURIComponent(id) + '?' + params.toString();
+  $('player-wrap').innerHTML = '';
+  $('player-wrap').appendChild(iframe);
   player = new YT.Player('player', {
-    videoId: id,
-    playerVars: { autoplay: 1, playsinline: 1, rel: 0, modestbranding: 1, fs: 0, enablejsapi: 1, origin: location.origin,
-      cc_load_policy: 0, iv_load_policy: 3 },
     events: {
       onReady: e => { hideCaptions(); e.target.playVideo(); startWatch(); },
       onApiChange: () => hideCaptions(),
@@ -229,10 +241,11 @@ function playVideo(id) {
         if (e.data === YT.PlayerState.PLAYING) { $('tapHint').style.display = 'none'; hideCaptions(); }
         if (e.data === YT.PlayerState.ENDED) backToScan();
       },
-      onError: () => {
+      onError: e => {
+        const code = e && e.data;
         backToScan();
         setTimeout(() => {
-          $('scanMsg').innerHTML = 'この動画は<br>再生できません<br><small>（埋め込み禁止の可能性）</small>';
+          $('scanMsg').innerHTML = 'この動画は<br>再生できません<br><small>（エラー ' + code + '）</small>';
           $('scanMsg').classList.add('error');
         }, 50);
       }
