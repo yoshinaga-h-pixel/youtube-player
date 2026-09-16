@@ -69,6 +69,7 @@
   <div class="text">
     <h1>QRコードをかざすと<br>動画が始まります</h1>
     <p>動画が終わると、読み取り画面に戻ります。</p>
+    <p style="font-size:.75rem;opacity:.6">ver 5（インカメ版）</p>
   </div>
   <button class="primary" id="startBtn">カメラを起動</button>
 </section>
@@ -121,9 +122,12 @@ function extractVideoId(text) {
 async function ensureCamera() {
   if (stream && stream.getVideoTracks().some(t => t.readyState === 'live')) return true;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'user' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false
-    });
+    // インカメを確実に選ぶ（exact指定→だめなら通常指定）
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: 'user' } }, audio: false });
+    } catch (e1) {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+    }
     video.srcObject = stream;
     await video.play();
     return true;
